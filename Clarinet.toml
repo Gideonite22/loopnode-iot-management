@@ -8,6 +8,10 @@ requirements = []
 path = "contracts/loopnode-registry.clar"
 depends_on = []
 
+[contracts.loopnode-transactions]
+path = "contracts/loopnode-transactions.clar"
+depends_on = []
+
 [repl]
 costs_version = 2
 parser_version = 2
