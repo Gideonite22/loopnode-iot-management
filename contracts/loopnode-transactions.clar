@@ -118,6 +118,9 @@
 (define-data-var subscription-id-counter uint u0)
 (define-data-var dispute-id-counter uint u0)
 
+;; Define a data variable to hold the ID we want to filter
+(define-data-var target-node-id uint u0)
+
 ;; Private Functions
 
 ;; Calculate platform fee
@@ -253,17 +256,16 @@
 ;; Create a one-time payment in escrow for a pay-per-use service
 (define-public (pay-for-service (service-id uint) (amount uint))
   (let
-    (
-      (payment-id (get-next-payment-id))
-    )
+    ((payment-id (get-next-payment-id)))
     (match (map-get? services { service-id: service-id })
       service-info
         (begin
           ;; Check service is active
-          (try! (is-service-active service-id))
+          (asserts! (is-some (is-service-active service-id)) (err ERR-SERVICE-NOT-FOUND))
+          (asserts! (unwrap-panic (is-service-active service-id)) (err ERR-SERVICE-NOT-FOUND))
           
           ;; Check payment model is pay-per-use
-          (asserts! (is-eq (get payment-model service-info) PAYMENT-MODEL-PAY-PER-USE) ERR-INVALID-PAYMENT-MODEL)
+          (asserts! (is-eq (get payment-model service-info) PAYMENT-MODEL-PAY-PER-USE) (err ERR-INVALID-PAYMENT-MODEL))
           
           ;; Check payment is sufficient
           (asserts! (>= amount (get price-per-use service-info)) ERR-PAYMENT-TOO-SMALL)
@@ -744,5 +746,34 @@
         )
       )
     (err ERR-SUBSCRIPTION-NOT-FOUND)
+  )
+)
+
+;; Helper function for filtering with fold - uses the global target-node-id
+(define-private (filter-node-id 
+    (id uint) 
+    (result-list (list 100 uint)))
+    
+    (if (is-eq id (var-get target-node-id))
+        result-list  ;; Skip this ID
+        (unwrap-panic (as-max-len? (append result-list id) u100))  ;; Keep this ID
+    )
+)
+
+(define-public (remove-node-from-category (node-id uint) (category (string-ascii 20)))
+  (begin
+    ;; Set the target ID for filtering
+    (var-set target-node-id node-id)
+    
+    (let 
+      ((current-list (default-to { node-ids: (list) } (map-get? node-categories { category: category })))
+       (filtered-list (fold filter-node-id (list) (get node-ids current-list))))
+      
+      (map-set node-categories 
+        { category: category } 
+        { node-ids: filtered-list }
+      )
+      (ok true)
+    )
   )
 )

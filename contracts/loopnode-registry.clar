@@ -109,15 +109,29 @@
     ))
 )
 
-;; Remove a node from a category
+;; Helper function for filtering lists - keeps items that don't match the target
+(define-private (filter-accumulator 
+    (current-id (string-ascii 36)) 
+    (result-so-far (list 100 (string-ascii 36)))
+    (target-id (string-ascii 36)))
+    
+    (if (is-eq current-id target-id)
+        ;; Skip this ID if it matches the target
+        result-so-far
+        ;; Otherwise add it to our result list
+        (unwrap-panic (as-max-len? (append result-so-far current-id) u100))
+    )
+)
+
+;; Remove a node from a category using fold
 (define-private (remove-from-category (node-id (string-ascii 36)) (category (string-ascii 32)))
     (let (
         (current-list (default-to { node-ids: (list) } (map-get? node-categories { category: category })))
-        (updated-list (filter (lambda (id) (not (is-eq id node-id))) (get node-ids current-list)))
+        (filtered-list (fold filter-accumulator (get node-ids current-list) (list) node-id))
     )
     (map-set node-categories 
         { category: category } 
-        { node-ids: updated-list }
+        { node-ids: filtered-list }
     ))
 )
 
@@ -142,13 +156,13 @@
     (var-set all-node-ids updated-list))
 )
 
-;; Remove from the global list of all nodes
+;; Remove from global list of all nodes using fold
 (define-private (remove-from-all-nodes (node-id (string-ascii 36)))
     (let (
         (current-list (var-get all-node-ids))
-        (updated-list (filter (lambda (id) (not (is-eq id node-id))) current-list))
+        (filtered-list (fold filter-accumulator current-list (list) node-id))
     )
-    (var-set all-node-ids updated-list))
+    (var-set all-node-ids filtered-list))
 )
 
 ;; =============================
@@ -373,7 +387,7 @@
         (node-info (map-get? nodes { node-id: node-id }))
         (current-time (unwrap-panic (get-block-info? time (- block-height u1))))
         (reputation-data (default-to { 
-            average-rating: INITIAL_REPUTATION, 
+            average-rating: INITIAL-REPUTATION, 
             rating-count: u0,
             total-rating-sum: u0 
           } (map-get? node-reputation { node-id: node-id })))
